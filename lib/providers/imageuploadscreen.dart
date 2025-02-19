@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:authenticationapp/aw3service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:authenticationapp/aw3service.dart';
 
 class ImageUploadProvider with ChangeNotifier {
   final AWSS3Service _s3Service = AWSS3Service();
@@ -25,19 +27,36 @@ class ImageUploadProvider with ChangeNotifier {
   List<String> get imageUrls => _imageUrls;
   bool get isFetching => _isFetching;
   String? get error => _error;
+  bool get isLoading => _isUploading || _isFetching;
 
-  get lastUploadedUrl => null;
+  // Get the current user's ID safely
+  String? get userId {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print("⚠️ User is not logged in!");
+      return null;
+    }
+    return user.uid;
+  }
 
-  get isLoading => null;
+  // Getter for user image URLs
+  List<String> get userImageUrls => _imageUrls;
 
-  get userImageUrls => null;
-
-  /// Pick image from camera or gallery
+  /// Pick image from camera/gallery
   Future<void> pickImage(ImageSource source) async {
+    if (source == ImageSource.gallery) {
+      PermissionStatus status = await Permission.photos.request();
+      if (!status.isGranted) {
+        _error = "Gallery access denied";
+        notifyListeners();
+        return;
+      }
+    }
+
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 80, // Compress image for better upload performance
+        imageQuality: 80,
       );
 
       if (pickedFile == null) {
@@ -46,59 +65,18 @@ class ImageUploadProvider with ChangeNotifier {
         return;
       }
 
-      File tempImage = File(pickedFile.path);
-      print("✅ Picked Image Path: ${tempImage.path}");
-
-      // Move image to permanent storage
-      _image = await moveFileToPermanentStorage(tempImage);
-
-      if (_image != null) {
-        print("📂 Moved Image Path: ${_image!.path}");
-        _error = null;
-      } else {
-        _error = "Failed to process image";
-        print("❌ Failed to move image to permanent storage.");
-      }
-
+      _image = File(pickedFile.path);
       notifyListeners();
     } catch (e) {
       _error = "Error picking image: $e";
-      print("❌ Error picking image: $e");
       notifyListeners();
     }
   }
-    Future<void> deleteImage(String imageUrl, String noteId, String userEmail) async {
-    // Implement the logic to delete the image
-    // For example, remove the image from the list and notify listeners
-    userImageUrls.remove(imageUrl);
-    notifyListeners();
-  }
 
-  /// Move image to permanent storage
-  Future<File?> moveFileToPermanentStorage(File file) async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
-      final newPath = '${directory.path}/$fileName';
-      final File newFile = await file.copy(newPath);
-      
-      // Save the image path to SharedPreferences
-      await saveImagePath(newFile.path);
-
-      return newFile;
-    } catch (e) {
-      print("❌ Error moving file: $e");
-      return null;
-    }
-  }
-
-  /// Upload image to AWS S3
-  Future<bool> uploadImageToS3({
-    required String noteId,
-    required String userEmail,
-  }) async {
-    if (_image == null) {
-      _error = "No image selected to upload";
+  /// Upload image to AWS S3 & store in Firestore
+  Future<bool> uploadImageToS3({required String noteId, required String userEmail}) async {
+    if (_image == null || userId == null) {
+      _error = "No image selected or user not logged in";
       notifyListeners();
       return false;
     }
@@ -108,13 +86,21 @@ class ImageUploadProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print("🛠 Uploading image for user: $userId, note: $noteId");
       final result = await _s3Service.uploadFile(_image!, noteId);
 
       if (result != null) {
         _uploadedImageUrl = result;
-        // Add to local list immediately for faster UI update
         _imageUrls.insert(0, result);
-        _error = null;
+
+        // Save to Firestore under the user's UID
+        await FirebaseFirestore.instance.collection('images').add({
+          'userId': userId,
+          'noteId': noteId,
+          'imageUrl': result,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
         print("✅ Image uploaded successfully: $_uploadedImageUrl");
       } else {
         _error = "Upload failed";
@@ -133,96 +119,108 @@ class ImageUploadProvider with ChangeNotifier {
     }
   }
 
+  /// Fetch images for the logged-in user & specific note
+  Future<void> fetchImagesFromFirestore(String noteId, String userEmail) async {
+    if (_isFetching || userId == null) return;
 
-Future<void> fetchImagesFromFirestore(String noteId, String userEmail) async {
-  if (_isFetching) return;
+    try {
+      _isFetching = true;
+      _error = null;
+      notifyListeners();
 
-  try {
-    _isFetching = true;
-    _error = null;
-    notifyListeners();
+      // Load images from local storage first
+      await _loadImagesFromLocal(noteId);
 
-    // Try loading images from local storage first
-    await _loadImagesFromLocal(noteId);
+      if (_imageUrls.isNotEmpty) {
+        print("📁 Loaded ${_imageUrls.length} images from local storage.");
+        _isFetching = false;
+        notifyListeners();
+        return;
+      }
 
-    // If we already have images, no need to fetch
-    if (_imageUrls.isNotEmpty) {
-      print("📁 Loaded ${_imageUrls.length} images from local storage.");
-      return;
+      print("🌍 No local images found, fetching from Firestore...");
+
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await FirebaseFirestore.instance
+          .collection('images')
+          .where('userId', isEqualTo: userId)
+          .where('noteId', isEqualTo: noteId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      _imageUrls = snapshot.docs
+          .map((doc) => doc.data()['imageUrl'] as String?)
+          .where((url) => url != null && url.isNotEmpty)
+          .cast<String>()
+          .toList();
+
+      print("✅ Fetched ${_imageUrls.length} images successfully");
+      await _saveImagesToLocal(noteId, _imageUrls);
+    } catch (e) {
+      _error = "Error fetching images: $e";
+      print("❌ Error fetching images: $e");
+    } finally {
+      _isFetching = false;
+      notifyListeners();
     }
-
-    print("🌍 No local images found, fetching from Firestore...");
-
-    final QuerySnapshot<Map<String, dynamic>> snapshot = await FirebaseFirestore.instance
-        .collection('images')
-        .where('noteId', isEqualTo: noteId)
-        .get();
-
-    _imageUrls = snapshot.docs
-        .map((doc) => doc.data()['imageUrl'] as String?)
-        .where((url) => url != null && url.isNotEmpty)
-        .cast<String>()
-        .toList();
-
-    print("✅ Fetched ${_imageUrls.length} images successfully");
-
-    // Save fetched images to local storage
-    await _saveImagesToLocal(noteId, _imageUrls);
-
-  } catch (e) {
-    _error = "Error fetching images: $e";
-    print("❌ Error fetching images: $e");
-  } finally {
-    _isFetching = false;
-    notifyListeners();
-  }
-}
-
-// Function to load images from local storage
-Future<void> _loadImagesFromLocal(String noteId) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final String? imagesJson = prefs.getString('images_$noteId');
-
-  if (imagesJson != null) {
-    _imageUrls = List<String>.from(jsonDecode(imagesJson));
-  }
-}
-
-// Function to save images locally
-Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  await prefs.setString('images_$noteId', jsonEncode(imageUrls));
-}
-
-
-
-  /// Save the image path to SharedPreferences
-  Future<void> saveImagePath(String path) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('savedImagePath', path);
   }
 
-  /// Retrieve the saved image path from SharedPreferences
-  Future<String?> getImagePath() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getString('savedImagePath');
+  /// Load images from local storage
+  Future<void> _loadImagesFromLocal(String noteId) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? imagesJson = prefs.getString('images_${userId}_$noteId');
+
+    if (imagesJson != null) {
+      _imageUrls = List<String>.from(jsonDecode(imagesJson));
+    }
   }
 
-  /// Reset selected image
-  void resetImage() {
-    _image = null;
-    _uploadedImageUrl = null;
-    _error = null;
-    notifyListeners();
+  /// Save images locally
+  Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('images_${userId}_$noteId', jsonEncode(imageUrls));
   }
 
-  /// Reset error state
-  void resetError() {
-    _error = null;
-    notifyListeners();
+  /// Delete image
+  Future<void> deleteImage(String imageUrl, String noteId, String userEmail) async {
+    if (userId == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('images')
+          .where('userId', isEqualTo: userId)
+          .where('noteId', isEqualTo: noteId)
+          .where('imageUrl', isEqualTo: imageUrl)
+          .get()
+          .then((snapshot) {
+        for (var doc in snapshot.docs) {
+          doc.reference.delete();
+        }
+      });
+
+      _imageUrls.remove(imageUrl);
+      await _saveImagesToLocal(noteId, _imageUrls);
+      notifyListeners();
+    } catch (e) {
+      print("❌ Error deleting image: $e");
+    }
   }
 
-  /// Reset provider state
+  /// Move image to permanent storage
+  Future<File?> moveFileToPermanentStorage(File file) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
+      final newPath = '${directory.path}/$fileName';
+      final File newFile = await file.copy(newPath);
+
+      return newFile;
+    } catch (e) {
+      print("❌ Error moving file: $e");
+      return null;
+    }
+  }
+
+  /// Reset state
   void reset() {
     _image = null;
     _uploadedImageUrl = null;
@@ -233,5 +231,9 @@ Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
     notifyListeners();
   }
 
-  void addImageUrl(String imageUrl) {}
+  /// Add image URL to list
+  void addImageUrl(String imageUrl) {
+    _imageUrls.add(imageUrl);
+    notifyListeners();
+  }
 }

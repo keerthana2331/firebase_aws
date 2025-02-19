@@ -2,6 +2,8 @@
 
 import 'package:authenticationapp/providers/forgetpassword_provider.dart';
 import 'package:authenticationapp/providers/homescreenprovider.dart';
+ // Import ImageUploadProvider
+import 'package:authenticationapp/providers/imageuploadscreen.dart';
 import 'package:authenticationapp/screens/authwrapper.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +17,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
   } catch (e) {
-    debugPrint("🚨 Error initializing Firebase: $e");
+    debugPrint("\ud83d\udea8 Error initializing Firebase: $e");
   }
 
   // Request necessary permissions
@@ -27,6 +29,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => NotesProvider()), // Ensure this provider is correctly implemented
         ChangeNotifierProvider(create: (_) => ForgotPasswordProvider()),
+        ChangeNotifierProvider(create: (_) => ImageUploadProvider()), // Added missing provider
       ],
       child: const MyApp(),
     ),
@@ -42,7 +45,7 @@ Future<void> requestPermissions() async {
 
   if (statuses[Permission.camera] != PermissionStatus.granted || 
       statuses[Permission.photos] != PermissionStatus.granted) {
-    debugPrint("⚠️ Permissions denied: Camera or Photos");
+    debugPrint("\u26a0\ufe0f Permissions denied: Camera or Photos");
   }
 }
 
