@@ -1,0 +1,41 @@
+
+import 'dart:math';
+import 'package:flutter/material.dart';
+
+class ToDoListIntroProvider extends ChangeNotifier {
+
+  final logoAnimationDuration = const Duration(milliseconds: 800);
+  final titleAnimationDuration = const Duration(milliseconds: 1000);
+  final firebaseAnimationDuration = const Duration(milliseconds: 1200);
+  final buttonAnimationDuration = const Duration(milliseconds: 1400);
+
+  double getLogoTranslation(double value) => 20 * (1 - value);
+  double getTitleScale(double value) => 1 + (0.1 * (1 - cos(value * 3.14)));
+  double getButtonTranslation(double value) => 10 * (1 - value);
+
+  
+  List<Color> getBackgroundGradient() => [
+        Colors.yellow.shade100,
+        Colors.orange.shade100,
+        Colors.deepOrange.shade100,
+      ];
+
+  List<Color> getTitleGradient() => [
+        Colors.orange.shade700,
+        Colors.deepOrange.shade900,
+      ];
+
+  List<Color> getFirebaseGradient() => [
+        Colors.yellow.shade600,
+        Colors.orange.shade600,
+        Colors.deepOrange.shade600,
+      ];
+
+  List<Color> getButtonGradient() => [
+        Colors.orange.shade400,
+        Colors.deepOrange.shade600,
+      ];
+
+  Color getLogoBackgroundColor1() => Colors.yellow.shade200;
+  Color getLogoBackgroundColor2() => Colors.orange.shade200;
+}

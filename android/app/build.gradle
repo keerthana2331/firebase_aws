@@ -1,0 +1,51 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+
+    // Add the Google services Gradle plugin
+    id 'com.google.gms.google-services' version '4.4.2' apply false
+}
+
+android {
+    namespace = "com.example.fire_base"
+    compileSdk = 34 // Ensure it matches your Flutter project's compileSdkVersion
+
+    // Set a compatible NDK version
+    ndkVersion "27.0.12077973" // This version should be compatible with your project
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId = "com.example.fire_base"
+        minSdk = 23 // Ensure this is the required minSdkVersion for your project
+        targetSdk = 33 // Set targetSdk to match compileSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.." // Make sure the correct source path is specified
+}
+
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    // Add any additional Firebase products you need
+}
+
+apply plugin: 'com.google.gms.google-services'

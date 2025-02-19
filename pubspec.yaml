@@ -1,0 +1,51 @@
+name: authenticationapp
+description: A new Flutter project.
+
+# Prevents accidental publishing to pub.dev
+publish_to: 'none'
+
+# Versioning for the app
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.2 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^3.10.0
+  firebase_auth: ^5.4.0
+  google_sign_in: ^6.2.2
+  cloud_firestore: 5.6.1
+  the_apple_sign_in: ^1.1.1
+  cupertino_icons: ^1.0.2
+  firebase_storage: ^12.4.0
+  image_picker: ^1.1.2
+  animated_text_kit: ^4.2.2
+  intl: 0.19.0
+  shared_preferences: ^2.3.5
+  google_fonts: ^6.2.1
+  provider: ^6.1.2
+  email_validator: ^3.0.0
+  path: ^1.8.0
+  http: ^1.3.0
+  aws_s3_api: ^2.0.0
+
+  connectivity_plus: ^6.1.2
+  flutter_dotenv: ^5.2.1
+  permission_handler: ^11.3.1
+
+  mime: any
+  path_provider: any
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/google.png.png
+    - assets/firebase.png.png
+    - assets/avatar.png.png
