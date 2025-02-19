@@ -28,6 +28,10 @@ class ImageUploadProvider with ChangeNotifier {
 
   get lastUploadedUrl => null;
 
+  get isLoading => null;
+
+  get userImageUrls => null;
+
   /// Pick image from camera or gallery
   Future<void> pickImage(ImageSource source) async {
     try {
@@ -62,6 +66,12 @@ class ImageUploadProvider with ChangeNotifier {
       print("❌ Error picking image: $e");
       notifyListeners();
     }
+  }
+    Future<void> deleteImage(String imageUrl, String noteId, String userEmail) async {
+    // Implement the logic to delete the image
+    // For example, remove the image from the list and notify listeners
+    userImageUrls.remove(imageUrl);
+    notifyListeners();
   }
 
   /// Move image to permanent storage
@@ -124,7 +134,7 @@ class ImageUploadProvider with ChangeNotifier {
   }
 
 
-Future<void> fetchImagesFromFirestore(String noteId) async {
+Future<void> fetchImagesFromFirestore(String noteId, String userEmail) async {
   if (_isFetching) return;
 
   try {
@@ -222,4 +232,6 @@ Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
     _isFetching = false;
     notifyListeners();
   }
+
+  void addImageUrl(String imageUrl) {}
 }

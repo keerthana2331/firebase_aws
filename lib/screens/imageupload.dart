@@ -149,7 +149,7 @@ class ImageUploadScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => ImageUploadProvider()..fetchImagesForNote(noteId, userEmail),
+      create: (context) => ImageUploadProvider()..fetchImagesFromFirestore(noteId, userEmail),
       child: Consumer<ImageUploadProvider>(
         builder: (context, provider, child) {
           return Scaffold(
@@ -423,7 +423,7 @@ class ImageUploadScreen extends StatelessWidget {
                   userEmail: userEmail,
                 );
                 if (success) {
-                  await provider.fetchImagesForNote(noteId, userEmail);
+                  await provider.fetchImagesFromFirestore(noteId, userEmail);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
