@@ -101,7 +101,7 @@ class ImageUploadProvider with ChangeNotifier {
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        await _saveImagesToLocal(noteId, _imageUrls);
+        await saveImagesToLocal(noteId, _imageUrls);
 
         print(" Image uploaded successfully: $_uploadedImageUrl");
       } else {
@@ -129,7 +129,7 @@ class ImageUploadProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _loadImagesFromLocal(noteId);
+      await loadImagesFromLocal(noteId);
 
       print(" Fetching images from Firestore...");
 
@@ -151,7 +151,7 @@ class ImageUploadProvider with ChangeNotifier {
       _imageUrls = uniqueUrls.toList();
 
       print(" Fetched ${_imageUrls.length} unique images successfully");
-      await _saveImagesToLocal(noteId, _imageUrls);
+      await saveImagesToLocal(noteId, _imageUrls);
     } catch (e) {
       _error = "Error fetching images: $e";
       print(" Error fetching images: $e");
@@ -161,7 +161,7 @@ class ImageUploadProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _loadImagesFromLocal(String noteId) async {
+  Future<void> loadImagesFromLocal(String noteId) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? imagesJson = prefs.getString('images_${userId}_$noteId');
 
@@ -172,7 +172,7 @@ class ImageUploadProvider with ChangeNotifier {
     }
   }
 
-  Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
+  Future<void> saveImagesToLocal(String noteId, List<String> imageUrls) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('images_${userId}_$noteId', jsonEncode(imageUrls));
   }
@@ -197,7 +197,7 @@ class ImageUploadProvider with ChangeNotifier {
       _imageUrls.remove(imageUrl);
 
       _downloadedFiles.remove(imageUrl);
-      await _saveImagesToLocal(noteId, _imageUrls);
+      await saveImagesToLocal(noteId, _imageUrls);
       notifyListeners();
     } catch (e) {
       print(" Error deleting image: $e");

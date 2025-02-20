@@ -1,4 +1,4 @@
-// ignore_for_file: unreachable_switch_default, await_only_futures, prefer_const_constructors, use_build_context_synchronously, non_constant_identifier_names, use_rethrow_when_possible;
+// ignore_for_file: unreachable_switch_default, await_only_futures, prefer_const_constructors, use_build_context_synchronously, non_constant_identifier_names, use_rethrow_when_possible;, unnecessary_null_comparison, unnecessary_null_comparison
 import 'package:authenticationapp/models/database.dart';
 import 'package:authenticationapp/screens/homepage.dart' as app;
 
@@ -32,7 +32,7 @@ class AuthMethods {
 
     User? userDetails = result.user;
 
-    // ignore: unnecessary_null_comparison
+  
     if (result != null) {
       Map<String, dynamic> userInfoMap = {
         "email": userDetails!.email,

@@ -8,11 +8,10 @@ import 'package:authenticationapp/screens/authwrapper.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart'; 
+import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
 
   try {
     await Firebase.initializeApp();
@@ -26,13 +25,12 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => NotesProvider()),
         ChangeNotifierProvider(create: (_) => ForgotPasswordProvider()),
-        ChangeNotifierProvider(create: (_) => ImageUploadProvider()), 
+        ChangeNotifierProvider(create: (_) => ImageUploadProvider()),
       ],
       child: const MyApp(),
     ),
   );
 }
-
 
 Future<void> requestPermissions() async {
   Map<Permission, PermissionStatus> statuses = await [
@@ -40,7 +38,7 @@ Future<void> requestPermissions() async {
     Permission.photos,
   ].request();
 
-  if (statuses[Permission.camera] != PermissionStatus.granted || 
+  if (statuses[Permission.camera] != PermissionStatus.granted ||
       statuses[Permission.photos] != PermissionStatus.granted) {
     debugPrint("\u26a0\ufe0f Permissions denied: Camera or Photos");
   }
@@ -58,7 +56,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: AuthWrapper(), 
+      home: AuthWrapper(),
     );
   }
 }

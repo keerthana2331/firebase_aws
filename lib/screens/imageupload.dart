@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'package:authenticationapp/providers/imageuploadscreen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,7 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+
 import 'package:permission_handler/permission_handler.dart';
 
 class ImageUploadScreen extends StatelessWidget {
@@ -19,15 +21,13 @@ class ImageUploadScreen extends StatelessWidget {
     required this.userEmail,
   }) : super(key: key);
 
-  // Save image path in SharedPreferences
-  Future<void> _saveImagePath(String imageUrl) async {
+  Future<void> saveImagePath(String imageUrl) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('imageUrl_$userEmail', imageUrl);
     print("Image path saved locally for user $userEmail: $imageUrl");
   }
 
-  // Fetch saved image path from SharedPreferences for current user
-  Future<String?> _fetchSavedImagePath() async {
+  Future<String?> fetchSavedImagePath() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? imageUrl = prefs.getString('imageUrl_$userEmail');
     if (imageUrl != null) {
@@ -38,43 +38,37 @@ class ImageUploadScreen extends StatelessWidget {
     return imageUrl;
   }
 
-  // Request storage permissions
-  Future<void> _requestStoragePermission(BuildContext context) async {
+  Future<void> requestStoragePermission(BuildContext context) async {
     if (Platform.isAndroid) {
       final status = await Permission.storage.status;
       if (status.isDenied) {
         await Permission.storage.request();
       }
 
-      // For Android 11 (API level 30) and above
       if (await Permission.manageExternalStorage.isDenied) {
         await Permission.manageExternalStorage.request();
       }
     }
   }
 
-  Future<void> _downloadImage(BuildContext context, String imageUrl) async {
+  Future<void> downloadImage(BuildContext context, String imageUrl) async {
     final provider = Provider.of<ImageUploadProvider>(context, listen: false);
 
     try {
-      // Check and request permissions first
-      await _requestStoragePermission(context);
-      
-      // Verify if permissions were granted
+      await requestStoragePermission(context);
+
       final storageStatus = await Permission.storage.status;
       final manageStorageStatus = await Permission.manageExternalStorage.status;
-      
+
       if (!storageStatus.isGranted && !manageStorageStatus.isGranted) {
         if (context.mounted) {
-          // Show dialog explaining why permission is needed
           await showDialog(
             context: context,
             builder: (BuildContext context) {
               return AlertDialog(
                 title: const Text('Permission Required'),
                 content: const Text(
-                  'Storage permission is required to download images. Please grant permission in Settings.'
-                ),
+                    'Storage permission is required to download images. Please grant permission in Settings.'),
                 actions: [
                   TextButton(
                     child: const Text('Cancel'),
@@ -95,7 +89,6 @@ class ImageUploadScreen extends StatelessWidget {
         return;
       }
 
-      // Show download progress
       if (context.mounted) {
         showDialog(
           context: context,
@@ -108,21 +101,17 @@ class ImageUploadScreen extends StatelessWidget {
         );
       }
 
-      // Perform the download
       final response = await http.get(Uri.parse(imageUrl));
-      
+
       if (response.statusCode != 200) {
         throw Exception('Failed to download image');
       }
 
-      // Add the image URL to the provider's uploaded images list
       provider.addImageUrl(imageUrl);
 
-      // Close progress dialog
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        
-        // Show success message
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Image downloaded successfully'),
@@ -131,11 +120,9 @@ class ImageUploadScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      // Close progress dialog if it's showing
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
-        
-        // Show error message
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Download failed: ${e.toString()}'),
@@ -149,7 +136,8 @@ class ImageUploadScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => ImageUploadProvider()..fetchImagesFromFirestore(noteId, userEmail),
+      create: (context) =>
+          ImageUploadProvider()..fetchImagesFromFirestore(noteId, userEmail),
       child: Consumer<ImageUploadProvider>(
         builder: (context, provider, child) {
           return Scaffold(
@@ -171,12 +159,12 @@ class ImageUploadScreen extends StatelessWidget {
                   child: SafeArea(
                     child: SingleChildScrollView(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 30.0, vertical: 20.0),
                         child: Column(
                           children: [
                             buildHeader(context),
                             const SizedBox(height: 30),
-                            // Combined image preview and picker section
                             buildImageSection(provider),
                             const SizedBox(height: 30),
                             buildUploadedImagesSection(context, provider),
@@ -263,7 +251,6 @@ class ImageUploadScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // Image Preview
                   Container(
                     height: 250,
                     width: double.infinity,
@@ -299,7 +286,6 @@ class ImageUploadScreen extends StatelessWidget {
                             ],
                           ),
                   ),
-                  // Image Picker Buttons
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
@@ -310,7 +296,8 @@ class ImageUploadScreen extends StatelessWidget {
                               child: buildGradientButton(
                                 icon: Icons.photo_library,
                                 label: 'Gallery',
-                                onPressed: () => provider.pickImage(ImageSource.gallery),
+                                onPressed: () =>
+                                    provider.pickImage(ImageSource.gallery),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -318,7 +305,8 @@ class ImageUploadScreen extends StatelessWidget {
                               child: buildGradientButton(
                                 icon: Icons.camera_alt,
                                 label: 'Camera',
-                                onPressed: () => provider.pickImage(ImageSource.camera),
+                                onPressed: () =>
+                                    provider.pickImage(ImageSource.camera),
                               ),
                             ),
                           ],
@@ -447,7 +435,8 @@ class ImageUploadScreen extends StatelessWidget {
     );
   }
 
-  Widget buildUploadedImagesSection(BuildContext context, ImageUploadProvider provider) {
+  Widget buildUploadedImagesSection(
+      BuildContext context, ImageUploadProvider provider) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0, end: 1),
       duration: const Duration(milliseconds: 1800),
@@ -474,7 +463,8 @@ class ImageUploadScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.photo_album, color: Colors.deepOrange.shade400),
+                      Icon(Icons.photo_album,
+                          color: Colors.deepOrange.shade400),
                       const SizedBox(width: 8),
                       Text(
                         'Your Uploaded Images',
@@ -513,7 +503,8 @@ class ImageUploadScreen extends StatelessWidget {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         crossAxisSpacing: 15,
                         mainAxisSpacing: 15,
@@ -532,7 +523,9 @@ class ImageUploadScreen extends StatelessWidget {
       },
     );
   }
-  Widget buildImageCard(BuildContext context, ImageUploadProvider provider, int index) {
+
+  Widget buildImageCard(
+      BuildContext context, ImageUploadProvider provider, int index) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -600,7 +593,7 @@ class ImageUploadScreen extends StatelessWidget {
                 buildImageActionButton(
                   icon: Icons.download,
                   color: Colors.blue.shade700,
-                  onPressed: () => _downloadImage(
+                  onPressed: () => downloadImage(
                     context,
                     provider.userImageUrls[index],
                   ),
@@ -608,7 +601,7 @@ class ImageUploadScreen extends StatelessWidget {
                 buildImageActionButton(
                   icon: Icons.delete_outline,
                   color: Colors.red,
-                  onPressed: () => _showDeleteConfirmation(
+                  onPressed: () => showDeleteConfirmation(
                     context,
                     provider,
                     index,
@@ -643,7 +636,7 @@ class ImageUploadScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showDeleteConfirmation(
+  Future<void> showDeleteConfirmation(
     BuildContext context,
     ImageUploadProvider provider,
     int index,
