@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AWSS3Service {
   final String baseApiUrl =
       "https://filesapisample.stackmod.info/api/presigned-url";
+
   Future<String?> uploadFile(File file, String noteId) async {
     try {
       if (!file.existsSync()) {
@@ -14,26 +15,28 @@ class AWSS3Service {
         return null;
       }
 
-      print(" Uploading file: ${file.uri.pathSegments.last}");
+      print(" Attempting to upload image: ${file.uri.pathSegments.last}");
 
       final response = await http.post(
         Uri.parse(baseApiUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: jsonEncode(
             {"noteId": noteId, "fileName": file.uri.pathSegments.last}),
       );
 
-      print(" Presigned URL Response Code: ${response.statusCode}");
+      print(" Presigned URL Response Status: ${response.statusCode}");
       print(" Presigned URL Response Body: ${response.body}");
 
       if (response.statusCode != 200) {
-        print("❌ Error: Failed to get presigned URL.");
+        print(" Failed to get presigned URL. Response: ${response.body}");
         return null;
       }
 
-      final Map<String, dynamic> data = jsonDecode(response.body);
+      final data = jsonDecode(response.body);
       if (!data.containsKey("url") || !data.containsKey("uploadedFilePath")) {
-        print(" Error: Invalid response (Missing 'url' or 'uploadedFilePath')");
+        print(" Invalid response: Missing 'url' or 'uploadedFilePath'");
         return null;
       }
 
@@ -45,30 +48,26 @@ class AWSS3Service {
 
       final uploadResponse = await http.put(
         Uri.parse(uploadUrl),
-        headers: {'Content-Type': mimeType},
+        headers: {
+          'Content-Type': mimeType,
+        },
         body: await file.readAsBytes(),
       );
 
-      if (uploadResponse.statusCode == 200) {
-        print(" File uploaded successfully: $fileUrl");
+      print(" S3 Upload Response Status: ${uploadResponse.statusCode}");
+      print(" S3 Upload Response Body: ${uploadResponse.body}");
 
-        //  Ensure file is publicly accessible
-        print(" Checking if file is accessible: $fileUrl");
-        final accessibilityCheck = await http.get(Uri.parse(fileUrl));
-        if (accessibilityCheck.statusCode != 200) {
-          print(
-              " Error: Uploaded file is not accessible. Check S3 permissions.");
-          return null;
-        }
+      if (uploadResponse.statusCode == 200) {
+        print(" File successfully uploaded: $fileUrl");
 
         await saveImageToFirestore(fileUrl, noteId);
         return fileUrl;
       } else {
-        print(" Upload failed. Response: ${uploadResponse.statusCode}");
+        print(" File upload failed. Response: ${uploadResponse.body}");
         return null;
       }
     } catch (e, stackTrace) {
-      print(" Unexpected Error: $e");
+      print(" Upload error: $e");
       print("Stack trace: $stackTrace");
       return null;
     }
@@ -102,7 +101,6 @@ class AWSS3Service {
           if (retryCount == maxRetries) {
             rethrow;
           }
-
           await Future.delayed(Duration(seconds: retryCount));
         }
       }
@@ -128,9 +126,11 @@ class AWSS3Service {
 
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
+        print(' Starting after document: ${lastDocument.id}');
       }
 
       query = query.limit(limit);
+
       final QuerySnapshot<Object?> snapshot = await query.get();
 
       print(" Firestore Docs Count: ${snapshot.docs.length}");
@@ -138,6 +138,11 @@ class AWSS3Service {
       if (snapshot.docs.isEmpty) {
         print(' No images found for noteId: $noteId');
         return [];
+      }
+
+      for (var doc in snapshot.docs) {
+        print(" Document ID: ${doc.id}");
+        print(" Document Data: ${doc.data()}");
       }
 
       final List<String> urls = snapshot.docs
@@ -150,14 +155,8 @@ class AWSS3Service {
           .cast<String>()
           .toList();
 
-      for (String url in urls) {
-        final checkResponse = await http.get(Uri.parse(url));
-        if (checkResponse.statusCode != 200) {
-          print(" Error: Image URL is invalid or inaccessible: $url");
-        }
-      }
-
       print(" Successfully fetched ${urls.length} images for noteId: $noteId");
+
       return urls;
     } catch (e, stackTrace) {
       print(" Error fetching images: $e");
