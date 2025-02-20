@@ -172,7 +172,7 @@ class ImageUploadScreen extends StatelessWidget {
                   child: SafeArea(
                     child: SingleChildScrollView(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 20.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 30.0, vertical: 30.0),
                         child: Column(
                           children: [
                             buildHeader(context),

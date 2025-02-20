@@ -43,7 +43,7 @@ class LogIn extends StatelessWidget {
                   child: SingleChildScrollView(
                       child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 50.0, vertical: 122.0),
+                        horizontal: 40.0, vertical: 122.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.max,
