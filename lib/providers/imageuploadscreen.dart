@@ -19,8 +19,10 @@ class ImageUploadProvider with ChangeNotifier {
   List<String> _imageUrls = [];
   bool _isFetching = false;
   String? _error;
+ 
+  final Map<String, String> _downloadedFiles = {};
 
-  // Getters
+  
   File? get image => _image;
   bool get isUploading => _isUploading;
   String? get uploadedImageUrl => _uploadedImageUrl;
@@ -29,20 +31,17 @@ class ImageUploadProvider with ChangeNotifier {
   String? get error => _error;
   bool get isLoading => _isUploading || _isFetching;
 
-  // Get the current user's ID safely
   String? get userId {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      print("⚠️ User is not logged in!");
+      print(" User is not logged in!");
       return null;
     }
     return user.uid;
   }
-
-  // Getter for user image URLs
   List<String> get userImageUrls => _imageUrls;
 
-  /// Pick image from camera/gallery
+
   Future<void> pickImage(ImageSource source) async {
     if (source == ImageSource.gallery) {
       PermissionStatus status = await Permission.photos.request();
@@ -73,7 +72,7 @@ class ImageUploadProvider with ChangeNotifier {
     }
   }
 
-  /// Upload image to AWS S3 & store in Firestore
+
   Future<bool> uploadImageToS3({required String noteId, required String userEmail}) async {
     if (_image == null || userId == null) {
       _error = "No image selected or user not logged in";
@@ -91,9 +90,12 @@ class ImageUploadProvider with ChangeNotifier {
 
       if (result != null) {
         _uploadedImageUrl = result;
-        _imageUrls.insert(0, result);
+        
+       
+        if (!_imageUrls.contains(result)) {
+          _imageUrls.insert(0, result);
+        }
 
-        // Save to Firestore under the user's UID
         await FirebaseFirestore.instance.collection('images').add({
           'userId': userId,
           'noteId': noteId,
@@ -101,10 +103,13 @@ class ImageUploadProvider with ChangeNotifier {
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        print("✅ Image uploaded successfully: $_uploadedImageUrl");
+       
+        await _saveImagesToLocal(noteId, _imageUrls);
+
+        print(" Image uploaded successfully: $_uploadedImageUrl");
       } else {
         _error = "Upload failed";
-        print("⚠️ Upload failed");
+        print(" Upload failed");
       }
 
       _isUploading = false;
@@ -112,75 +117,90 @@ class ImageUploadProvider with ChangeNotifier {
       return _uploadedImageUrl != null;
     } catch (e) {
       _error = "Error uploading image: $e";
-      print("❌ Error uploading image: $e");
+      print("Error uploading image: $e");
       _isUploading = false;
       notifyListeners();
       return false;
     }
   }
+Future<void> fetchImagesFromFirestore(String noteId, String userEmail) async {
+  if (_isFetching) return;
 
-  /// Fetch images for the logged-in user & specific note
-  Future<void> fetchImagesFromFirestore(String noteId, String userEmail) async {
-    if (_isFetching || userId == null) return;
+  try {
+    _isFetching = true;
+    _error = null;
+    notifyListeners();
 
-    try {
-      _isFetching = true;
-      _error = null;
-      notifyListeners();
+    print(" Fetching images for: userEmail=$userEmail, noteId=$noteId");
 
-      // Load images from local storage first
-      await _loadImagesFromLocal(noteId);
+    final QuerySnapshot<Map<String, dynamic>> snapshot = await FirebaseFirestore.instance
+        .collection('images')
+        .where('userEmail', isEqualTo: userEmail) 
+        .where('noteId', isEqualTo: noteId)
+        .orderBy('timestamp', descending: true)
+        .get();
 
-      if (_imageUrls.isNotEmpty) {
-        print("📁 Loaded ${_imageUrls.length} images from local storage.");
-        _isFetching = false;
-        notifyListeners();
-        return;
+    if (snapshot.docs.isEmpty) {
+      print(" No images found for userEmail: $userEmail and noteId: $noteId");
+    } else {
+      print(" Found ${snapshot.docs.length} images!");
+      for (var doc in snapshot.docs) {
+        print(" Image URL: ${doc.data()['imageUrl']}");
       }
-
-      print("🌍 No local images found, fetching from Firestore...");
-
-      final QuerySnapshot<Map<String, dynamic>> snapshot = await FirebaseFirestore.instance
-          .collection('images')
-          .where('userId', isEqualTo: userId)
-          .where('noteId', isEqualTo: noteId)
-          .orderBy('timestamp', descending: true)
-          .get();
-
-      _imageUrls = snapshot.docs
-          .map((doc) => doc.data()['imageUrl'] as String?)
-          .where((url) => url != null && url.isNotEmpty)
-          .cast<String>()
-          .toList();
-
-      print("✅ Fetched ${_imageUrls.length} images successfully");
-      await _saveImagesToLocal(noteId, _imageUrls);
-    } catch (e) {
-      _error = "Error fetching images: $e";
-      print("❌ Error fetching images: $e");
-    } finally {
-      _isFetching = false;
-      notifyListeners();
     }
+
+
+    _imageUrls = snapshot.docs
+        .map((doc) => doc.data()['imageUrl'] as String)
+        .where((url) => url.isNotEmpty)
+        .toList();
+
+    await _saveImagesToLocal(noteId, _imageUrls);
+
+  } catch (e) {
+    _error = "Error fetching images: $e";
+    print(" Error: $e");
+  } finally {
+    _isFetching = false;
+    notifyListeners();
   }
+}
 
-  /// Load images from local storage
-  Future<void> _loadImagesFromLocal(String noteId) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final String? imagesJson = prefs.getString('images_${userId}_$noteId');
 
-    if (imagesJson != null) {
-      _imageUrls = List<String>.from(jsonDecode(imagesJson));
-    }
-  }
 
-  /// Save images locally
   Future<void> _saveImagesToLocal(String noteId, List<String> imageUrls) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('images_${userId}_$noteId', jsonEncode(imageUrls));
   }
 
-  /// Delete image
+
+  Future<File?> downloadImage(String imageUrl, String noteId) async {
+    try {
+ 
+      if (_downloadedFiles.containsKey(imageUrl)) {
+        final existingPath = _downloadedFiles[imageUrl];
+        if (existingPath != null && File(existingPath).existsSync()) {
+          print(" Returning already downloaded file: $existingPath");
+          return File(existingPath);
+        }
+      }
+
+    
+      final String filename = '${imageUrl.hashCode}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$filename';
+      
+  
+      _downloadedFiles[imageUrl] = filePath;
+      
+      print(" Image downloaded to: $filePath");
+      return File(filePath);
+    } catch (e) {
+      print(" Error downloading image: $e");
+      return null;
+    }
+  }
+
   Future<void> deleteImage(String imageUrl, String noteId, String userEmail) async {
     if (userId == null) return;
 
@@ -198,29 +218,39 @@ class ImageUploadProvider with ChangeNotifier {
       });
 
       _imageUrls.remove(imageUrl);
+
+      _downloadedFiles.remove(imageUrl);
       await _saveImagesToLocal(noteId, _imageUrls);
       notifyListeners();
     } catch (e) {
-      print("❌ Error deleting image: $e");
+      print(" Error deleting image: $e");
     }
   }
 
-  /// Move image to permanent storage
   Future<File?> moveFileToPermanentStorage(File file) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.last}';
+   
+      final String uniqueId = base64Encode(file.path.codeUnits).replaceAll(RegExp(r'[\/\+\=]'), '');
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_$uniqueId.jpg';
       final newPath = '${directory.path}/$fileName';
+      
+  
+      if (await File(newPath).exists()) {
+        print(" File already exists at destination: $newPath");
+        return File(newPath);
+      }
+      
       final File newFile = await file.copy(newPath);
-
+      print(" File moved to permanent storage: $newPath");
       return newFile;
     } catch (e) {
-      print("❌ Error moving file: $e");
+      print(" Error moving file: $e");
       return null;
     }
   }
 
-  /// Reset state
+
   void reset() {
     _image = null;
     _uploadedImageUrl = null;
@@ -231,9 +261,10 @@ class ImageUploadProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Add image URL to list
   void addImageUrl(String imageUrl) {
-    _imageUrls.add(imageUrl);
-    notifyListeners();
+    if (!_imageUrls.contains(imageUrl)) {
+      _imageUrls.add(imageUrl);
+      notifyListeners();
+    }
   }
 }
